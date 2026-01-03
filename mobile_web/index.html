@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Altrus Mobile Simulator</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 16px;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+      .card {
+        background: #1e293b;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+      }
+      label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        margin-top: 8px;
+        border: none;
+        border-radius: 6px;
+        background: #38bdf8;
+        color: #0f172a;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button.stop {
+        background: #f87171;
+        color: #0f172a;
+      }
+      pre {
+        background: #0f172a;
+        padding: 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Altrus Mobile Simulator</h2>
+
+    <div class="card">
+      <label for="relay">Relay URL (HTTP)</label>
+      <input id="relay" value="" />
+      <label for="host">UDP Host</label>
+      <input id="host" value="192.168.1.45" />
+      <label for="port">UDP Port</label>
+      <input id="port" value="5055" />
+    </div>
+
+    <div class="card">
+      <button onclick="startSimulation('tachycardia')">Tachycardia</button>
+      <button onclick="startSimulation('bradycardia')">Bradycardia</button>
+      <button onclick="startSimulation('fever')">Fever</button>
+      <button onclick="startSimulation('heart_attack')">Heart Attack</button>
+      <button onclick="startSimulation('cardiac_arrest')">Cardiac Arrest</button>
+      <button class="stop" onclick="stopSimulation()">Stop</button>
+    </div>
+
+    <div class="card">
+      <strong>Last payload</strong>
+      <pre id="payload">-</pre>
+    </div>
+
+    <script>
+      let intervalId = null;
+      let startTime = null;
+
+      function defaultRelayUrl() {
+        return `${window.location.protocol}//${window.location.host}/send`;
+      }
+
+      function buildPayload(type, phase) {
+        const base = {
+          heart_rate: 80.0,
+          body_temperature: 36.7,
+          accel_x: 0.3,
+          accel_y: 0.2,
+          accel_z: 0.1,
+        };
+        if (type === 'tachycardia') {
+          base.heart_rate = phase === 0 ? 80.0 : 140.0;
+        } else if (type === 'bradycardia') {
+          base.heart_rate = phase === 0 ? 70.0 : 40.0;
+        } else if (type === 'fever') {
+          base.body_temperature = phase === 0 ? 36.7 : 39.2;
+        } else if (type === 'heart_attack') {
+          const accel = phase === 0 ? 0.3 : 4.2;
+          base.accel_x = accel;
+          base.accel_y = accel;
+          base.accel_z = accel;
+        } else if (type === 'cardiac_arrest') {
+          base.heart_rate = phase === 0 ? 75.0 : 20.0;
+        }
+        return base;
+      }
+
+      async function sendPayload(payload) {
+        const relayInput = document.getElementById('relay');
+        const relayUrl = relayInput.value.trim() || defaultRelayUrl();
+        const host = document.getElementById('host').value.trim();
+        const port = parseInt(document.getElementById('port').value.trim(), 10);
+        const body = JSON.stringify({ target_host: host, target_port: port, payload });
+        await fetch(relayUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+      }
+
+      function startSimulation(type) {
+        stopSimulation();
+        startTime = Date.now();
+        const relayInput = document.getElementById('relay');
+        if (!relayInput.value.trim()) {
+          relayInput.value = defaultRelayUrl();
+        }
+        intervalId = setInterval(async () => {
+          const elapsed = (Date.now() - startTime) / 1000;
+          const phase = elapsed < 5 ? 0 : 1;
+          const payload = buildPayload(type, phase);
+          document.getElementById('payload').textContent = JSON.stringify(payload, null, 2);
+          try {
+            await sendPayload(payload);
+          } catch (error) {
+            document.getElementById('payload').textContent = `Error: ${error}`;
+          }
+        }, 500);
+      }
+
+      function stopSimulation() {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }
+    </script>
+  </body>
+</html>
