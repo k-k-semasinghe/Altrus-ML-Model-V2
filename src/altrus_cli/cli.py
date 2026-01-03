@@ -20,8 +20,13 @@ PREDEFINED_SENSORS = [
 ]
 
 PREDEFINED_ANOMALIES = [
-    "fall_detection",
+    "tachycardia",
+    "bradycardia",
+    "fever",
+    "heart_attack",
+    "cardiac_arrest",
     "arrhythmia",
+    "fall_detection",
     "stress_spike",
     "overexertion",
     "sleep_disruption",
