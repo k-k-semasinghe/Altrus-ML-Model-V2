@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import pickle
 from pathlib import Path
 
 
@@ -101,62 +102,158 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "Run a short UDP simulation test:\n\n"
         "```bash\n"
         "python -m tests.run_simulation\n"
-        "```\n",
+        "```\n\n"
+        "## Models\n\n"
+        "Default models are stored in `models/activity_model.pkl` and "
+        "`models/anomaly_model.pkl`. Replace them with your trained models by copying "
+        "new `.pkl` files into the `models/` folder.\n",
         encoding="utf-8",
     )
 
     if config.model_choice == "default":
-        (models_dir / "user_model.py").write_text(
-            "\"\"\"Default model for anomaly detection and activity classification.\"\"\"\n\n"
-            "class UserModel:\n"
-            "    \"\"\"Simple threshold-based model for simulated sensor data.\"\"\"\n\n"
-            "    def __init__(self, threshold: float = 2.5) -> None:\n"
-            "        self.threshold = threshold\n\n"
-            "    def predict(self, features: list[float], activities: list[str]) -> dict:\n"
-            "        \"\"\"Return a basic anomaly prediction and activity label.\"\"\"\n"
-            "        if not features:\n"
-            "            return {\"anomaly\": False, \"score\": 0.0, \"activity\": activities[0]}\n"
-            "        max_abs = max(abs(value) for value in features)\n"
-            "        score = min(max_abs / self.threshold, 1.0)\n"
-            "        anomaly = max_abs >= self.threshold\n"
-            "        activity = _classify_activity(max_abs, activities)\n"
-            "        return {\"anomaly\": anomaly, \"score\": round(score, 3), \"activity\": activity}\n\n"
+        (models_dir / "activity_model.py").write_text(
+            "\"\"\"Default activity classifier model.\"\"\"\n\n"
+            "import pickle\n"
+            "from pathlib import Path\n\n"
             "\n"
-            "def _classify_activity(max_abs: float, activities: list[str]) -> str:\n"
-            "    thresholds = [0.4, 1.2, 2.2]\n"
-            "    if max_abs <= thresholds[0]:\n"
-            "        return activities[0] if len(activities) > 0 else \"sleep\"\n"
-            "    if max_abs <= thresholds[1]:\n"
-            "        return activities[1] if len(activities) > 1 else \"rest\"\n"
-            "    if max_abs <= thresholds[2]:\n"
-            "        return activities[2] if len(activities) > 2 else \"walk\"\n"
-            "    return activities[3] if len(activities) > 3 else \"run\"\n\n"
+            "class ActivityModel:\n"
+            "    def __init__(self, thresholds: list[float]) -> None:\n"
+            "        self.thresholds = thresholds\n\n"
+            "    def predict(self, accel_magnitude: float, activities: list[str]) -> str:\n"
+            "        if accel_magnitude <= self.thresholds[0]:\n"
+            "            return activities[0] if len(activities) > 0 else \"sleep\"\n"
+            "        if accel_magnitude <= self.thresholds[1]:\n"
+            "            return activities[1] if len(activities) > 1 else \"rest\"\n"
+            "        if accel_magnitude <= self.thresholds[2]:\n"
+            "            return activities[2] if len(activities) > 2 else \"walk\"\n"
+            "        return activities[3] if len(activities) > 3 else \"run\"\n\n"
             "\n"
-            "def load_model() -> UserModel:\n"
-            "    return UserModel()\n",
+            "def load_activity_model() -> ActivityModel:\n"
+            "    path = Path(__file__).with_name(\"activity_model.pkl\")\n"
+            "    if path.exists():\n"
+            "        data = pickle.loads(path.read_bytes())\n"
+            "        return ActivityModel(data[\"thresholds\"])\n"
+            "    return ActivityModel([0.4, 1.2, 2.2])\n",
             encoding="utf-8",
         )
-    else:
-        (models_dir / "user_model.py").write_text(
-            "\"\"\"Custom model stub. Replace with your trained model implementation.\"\"\"\n\n"
-            "class UserModel:\n"
-            "    \"\"\"Implement your own predict method.\"\"\"\n\n"
-            "    def predict(self, features: list[float], activities: list[str]) -> dict:\n"
-            "        \"\"\"Return a dict with anomaly, score, and activity keys.\"\"\"\n"
-            "        raise NotImplementedError(\"Replace with your model logic.\")\n\n"
+
+        (models_dir / "anomaly_model.py").write_text(
+            "\"\"\"Default anomaly detector model.\"\"\"\n\n"
+            "import pickle\n"
+            "from pathlib import Path\n\n"
             "\n"
-            "def load_model() -> UserModel:\n"
-            "    return UserModel()\n",
+            "class AnomalyModel:\n"
+            "    def __init__(self, thresholds: dict[str, float]) -> None:\n"
+            "        self.thresholds = thresholds\n\n"
+            "    def predict(self, payload: dict, anomalies: list[str]) -> dict:\n"
+            "        heart_rate = payload.get(\"heart_rate\")\n"
+            "        temperature = payload.get(\"body_temperature\")\n"
+            "        accel = max(\n"
+            "            abs(payload.get(\"accel_x\", 0.0)),\n"
+            "            abs(payload.get(\"accel_y\", 0.0)),\n"
+            "            abs(payload.get(\"accel_z\", 0.0)),\n"
+            "        )\n"
+            "        anomaly_type = None\n"
+            "        score = 0.0\n"
+            "        if heart_rate is not None:\n"
+            "            if heart_rate >= self.thresholds[\"tachycardia\"]:\n"
+            "                anomaly_type = \"tachycardia\"\n"
+            "                score = min((heart_rate - self.thresholds[\"tachycardia\"]) / 40, 1.0)\n"
+            "            elif heart_rate <= self.thresholds[\"bradycardia\"]:\n"
+            "                anomaly_type = \"bradycardia\"\n"
+            "                score = min((self.thresholds[\"bradycardia\"] - heart_rate) / 40, 1.0)\n"
+            "        if temperature is not None and temperature >= self.thresholds[\"fever\"]:\n"
+            "            anomaly_type = \"fever\"\n"
+            "            score = max(score, min((temperature - self.thresholds[\"fever\"]) / 2.0, 1.0))\n"
+            "        if accel >= self.thresholds[\"heart_attack\"]:\n"
+            "            anomaly_type = \"heart_attack\"\n"
+            "            score = max(score, min((accel - self.thresholds[\"heart_attack\"]) / 2.0, 1.0))\n"
+            "        if heart_rate is not None and heart_rate <= self.thresholds[\"cardiac_arrest\"]:\n"
+            "            anomaly_type = \"cardiac_arrest\"\n"
+            "            score = 1.0\n"
+            "        anomaly = anomaly_type is not None\n"
+            "        if anomaly_type not in anomalies:\n"
+            "            anomaly_type = None\n"
+            "            anomaly = False\n"
+            "            score = 0.0\n"
+            "        return {\n"
+            "            \"anomaly\": anomaly,\n"
+            "            \"score\": round(score, 3),\n"
+            "            \"anomaly_type\": anomaly_type or \"normal\",\n"
+            "        }\n\n"
+            "\n"
+            "def load_anomaly_model() -> AnomalyModel:\n"
+            "    path = Path(__file__).with_name(\"anomaly_model.pkl\")\n"
+            "    if path.exists():\n"
+            "        data = pickle.loads(path.read_bytes())\n"
+            "        return AnomalyModel(data[\"thresholds\"])\n"
+            "    return AnomalyModel({\n"
+            "        \"tachycardia\": 120.0,\n"
+            "        \"bradycardia\": 50.0,\n"
+            "        \"fever\": 38.0,\n"
+            "        \"heart_attack\": 3.5,\n"
+            "        \"cardiac_arrest\": 30.0,\n"
+            "    })\n",
+            encoding="utf-8",
+        )
+
+        activity_params = {\"thresholds\": [0.4, 1.2, 2.2]}
+        anomaly_params = {
+            \"thresholds\": {
+                \"tachycardia\": 120.0,
+                \"bradycardia\": 50.0,
+                \"fever\": 38.0,
+                \"heart_attack\": 3.5,
+                \"cardiac_arrest\": 30.0,
+            }
+        }
+        (models_dir / "activity_model.pkl").write_bytes(pickle.dumps(activity_params))
+        (models_dir / "anomaly_model.pkl").write_bytes(pickle.dumps(anomaly_params))
+    else:
+        (models_dir / "activity_model.py").write_text(
+            "\"\"\"Custom activity model stub.\"\"\"\n\n"
+            "class ActivityModel:\n"
+            "    def predict(self, accel_magnitude: float, activities: list[str]) -> str:\n"
+            "        raise NotImplementedError(\"Replace with your activity model logic.\")\n\n"
+            "\n"
+            "def load_activity_model() -> ActivityModel:\n"
+            "    return ActivityModel()\n",
+            encoding="utf-8",
+        )
+        (models_dir / "anomaly_model.py").write_text(
+            "\"\"\"Custom anomaly model stub.\"\"\"\n\n"
+            "class AnomalyModel:\n"
+            "    def predict(self, payload: dict, anomalies: list[str]) -> dict:\n"
+            "        raise NotImplementedError(\"Replace with your anomaly model logic.\")\n\n"
+            "\n"
+            "def load_anomaly_model() -> AnomalyModel:\n"
+            "    return AnomalyModel()\n",
             encoding="utf-8",
         )
 
     (pipelines_dir / "inference.py").write_text(
         "from __future__ import annotations\n\n"
-        "from models.user_model import load_model\n\n"
+        "from models.activity_model import load_activity_model\n"
+        "from models.anomaly_model import load_anomaly_model\n\n"
         "\n"
-        "def run_inference(features: list[float], activities: list[str]) -> dict:\n"
-        "    model = load_model()\n"
-        "    return model.predict(features, activities)\n",
+        "def _accel_magnitude(payload: dict) -> float:\n"
+        "    return max(\n"
+        "        abs(payload.get(\"accel_x\", 0.0)),\n"
+        "        abs(payload.get(\"accel_y\", 0.0)),\n"
+        "        abs(payload.get(\"accel_z\", 0.0)),\n"
+        "    )\n\n"
+        "\n"
+        "def run_inference(payload: dict, activities: list[str], anomalies: list[str]) -> dict:\n"
+        "    activity_model = load_activity_model()\n"
+        "    anomaly_model = load_anomaly_model()\n"
+        "    activity = activity_model.predict(_accel_magnitude(payload), activities)\n"
+        "    anomaly_result = anomaly_model.predict(payload, anomalies)\n"
+        "    return {\n"
+        "        \"activity\": activity,\n"
+        "        \"anomaly\": anomaly_result[\"anomaly\"],\n"
+        "        \"anomaly_type\": anomaly_result[\"anomaly_type\"],\n"
+        "        \"score\": anomaly_result[\"score\"],\n"
+        "    }\n",
         encoding="utf-8",
     )
 
@@ -164,9 +261,10 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "from pipelines.inference import run_inference\n\n"
         "\n"
         "def main() -> None:\n"
-        "    sample_features = [0.0, 0.0, 0.0]\n"
+        "    sample = {\"accel_x\": 0.0, \"accel_y\": 0.0, \"accel_z\": 0.0}\n"
         "    activities = [\"sleep\", \"rest\", \"walk\", \"run\"]\n"
-        "    result = run_inference(sample_features, activities)\n"
+        "    anomalies = [\"tachycardia\", \"bradycardia\", \"fever\", \"heart_attack\", \"cardiac_arrest\"]\n"
+        "    result = run_inference(sample, activities, anomalies)\n"
         "    print(f\"Inference result: {result}\")\n\n"
         "\n"
         "if __name__ == \"__main__\":\n"
@@ -180,20 +278,18 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "from pipelines.inference import run_inference\n"
         "from sensors.simulated.simulator import generate_sample\n\n"
         "\n"
-        "def _extract_features(sample: dict) -> list[float]:\n"
-        "    return [value for value in sample.values() if isinstance(value, (int, float))]\n\n"
-        "\n"
         "def main() -> None:\n"
         "    activities = [\"sleep\", \"rest\", \"walk\", \"run\"]\n"
+        "    anomalies = [\"tachycardia\", \"bradycardia\", \"fever\", \"heart_attack\", \"cardiac_arrest\"]\n"
         "    print(\"Running simulated live loop... (press Ctrl+C to stop)\")\n"
         "    while True:\n"
         "        sample = generate_sample()\n"
-        "        features = _extract_features(sample)\n"
-        "        prediction = run_inference(features, activities)\n"
+        "        prediction = run_inference(sample, activities, anomalies)\n"
         "        status = \"ANOMALY\" if prediction[\"anomaly\"] else \"normal\"\n"
         "        print(\n"
         "            f\"sample={sample} -> {status} \"\n"
-        "            f\"activity={prediction['activity']} (score={prediction['score']})\"\n"
+        "            f\"activity={prediction['activity']} type={prediction['anomaly_type']} \"\n"
+        "            f\"(score={prediction['score']})\"\n"
         "        )\n"
         "        time.sleep(1.0)\n\n"
         "\n"
@@ -222,13 +318,37 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "from __future__ import annotations\n\n"
         "import json\n"
         "import socket\n"
+        "import sys\n"
         "import time\n\n"
         "from sensors.simulated.simulator import generate_sample\n\n"
         "\n"
-        "def main() -> None:\n"
+        "def _parse_args() -> tuple[str, str, int]:\n"
+        "    protocol = \"udp\"\n"
         "    host = \"127.0.0.1\"\n"
         "    port = 5055\n"
-        "    print(f\"Sending UDP samples to {host}:{port}...\")\n"
+        "    for arg in sys.argv[1:]:\n"
+        "        if arg.startswith(\"--protocol=\"):\n"
+        "            protocol = arg.split(\"=\", 1)[1]\n"
+        "        if arg.startswith(\"--host=\"):\n"
+        "            host = arg.split(\"=\", 1)[1]\n"
+        "        if arg.startswith(\"--port=\"):\n"
+        "            port = int(arg.split(\"=\", 1)[1])\n"
+        "    return protocol, host, port\n\n"
+        "\n"
+        "def main() -> None:\n"
+        "    protocol, host, port = _parse_args()\n"
+        "    print(f\"Sending {protocol.upper()} samples to {host}:{port}...\")\n"
+        "    if protocol == \"tcp\":\n"
+        "        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:\n"
+        "            sock.connect((host, port))\n"
+        "            for _ in range(5):\n"
+        "                sample = generate_sample()\n"
+        "                sample[\"heart_rate\"] = round(60 + abs(sample[\"accel_x\"]) * 20, 2)\n"
+        "                sample[\"body_temperature\"] = round(36.5 + abs(sample[\"accel_y\"]) * 0.5, 2)\n"
+        "                message = json.dumps(sample).encode(\"utf-8\") + b\"\\n\"\n"
+        "                sock.sendall(message)\n"
+        "                time.sleep(0.5)\n"
+        "        return\n"
         "    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:\n"
         "        for _ in range(5):\n"
         "            sample = generate_sample()\n"

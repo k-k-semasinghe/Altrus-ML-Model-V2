@@ -12,13 +12,17 @@ from typing import Iterable
 @dataclass
 class RuntimeConfig:
     activities: list[str]
+    anomalies: list[str]
 
 
 DEFAULT_ACTIVITIES = ["sleep", "rest", "walk", "run"]
-
-
-def _extract_features(payload: dict) -> list[float]:
-    return [value for value in payload.values() if isinstance(value, (int, float))]
+DEFAULT_ANOMALIES = [
+    "tachycardia",
+    "bradycardia",
+    "fever",
+    "heart_attack",
+    "cardiac_arrest",
+]
 
 
 def _format_payload(payload: dict) -> str:
@@ -43,6 +47,7 @@ def _load_config(path: Path) -> RuntimeConfig:
         return RuntimeConfig(activities=DEFAULT_ACTIVITIES)
 
     activities: list[str] = []
+    anomalies: list[str] = []
     current_key: str | None = None
     for line in path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
@@ -53,15 +58,24 @@ def _load_config(path: Path) -> RuntimeConfig:
             continue
         if stripped.startswith("-") and current_key == "activities":
             activities.append(stripped.lstrip("-").strip())
+        if stripped.startswith("-") and current_key == "anomalies":
+            anomalies.append(stripped.lstrip("-").strip())
 
-    return RuntimeConfig(activities=activities or DEFAULT_ACTIVITIES)
+    return RuntimeConfig(
+        activities=activities or DEFAULT_ACTIVITIES,
+        anomalies=anomalies or DEFAULT_ANOMALIES,
+    )
 
 
 def _run_with_udp(host: str, port: int, handle_payload: callable) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind((host, port))
+        sock.settimeout(1.0)
         while True:
-            data, _ = sock.recvfrom(4096)
+            try:
+                data, _ = sock.recvfrom(4096)
+            except socket.timeout:
+                continue
             handle_payload(data)
 
 
@@ -69,12 +83,20 @@ def _run_with_tcp(host: str, port: int, handle_payload: callable) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind((host, port))
         sock.listen(1)
+        sock.settimeout(1.0)
         while True:
-            conn, _ = sock.accept()
+            try:
+                conn, _ = sock.accept()
+            except socket.timeout:
+                continue
             with conn:
+                conn.settimeout(1.0)
                 buffer = b""
                 while True:
-                    chunk = conn.recv(4096)
+                    try:
+                        chunk = conn.recv(4096)
+                    except socket.timeout:
+                        continue
                     if not chunk:
                         break
                     buffer += chunk
@@ -106,15 +128,15 @@ def run_scanner(
             return
         if not isinstance(payload, dict):
             return
-        features = _extract_features(payload)
-        prediction = run_inference(features, config.activities)
+        prediction = run_inference(payload, config.activities, config.anomalies)
         now = time.time()
         if now - last_output >= output_interval:
             status = "ANOMALY" if prediction["anomaly"] else "normal"
             summary = _format_payload(payload)
             print(
                 f"{summary} -> {status} "
-                f"activity={prediction['activity']} (score={prediction['score']})"
+                f"activity={prediction['activity']} "
+                f"type={prediction['anomaly_type']} (score={prediction['score']})"
             )
             last_output = now
 

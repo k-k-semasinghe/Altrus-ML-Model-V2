@@ -27,3 +27,12 @@ To run a live scanner inside a generated project:
 cd <project-name>
 altrus run
 ```
+
+## Training workspace
+
+Use `training_workspace/` to generate demo `.pkl` files for the default activity and
+anomaly models. Copy the outputs into your generated project `models/` directory.
+
+```bash
+python training_workspace/train_models.py
+```
