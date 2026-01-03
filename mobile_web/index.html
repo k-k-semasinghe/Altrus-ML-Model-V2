@@ -88,27 +88,31 @@
         return `${window.location.protocol}//${window.location.host}/send`;
       }
 
+      function jitter(value, range) {
+        return Math.round((value + (Math.random() * range * 2 - range)) * 10) / 10;
+      }
+
       function buildPayload(type, phase) {
         const base = {
-          heart_rate: 80.0,
-          body_temperature: 36.7,
-          accel_x: 0.3,
-          accel_y: 0.2,
-          accel_z: 0.1,
+          heart_rate: jitter(80.0, 3.0),
+          body_temperature: jitter(36.7, 0.2),
+          accel_x: jitter(0.3, 0.1),
+          accel_y: jitter(0.2, 0.1),
+          accel_z: jitter(0.1, 0.1),
         };
         if (type === 'tachycardia') {
-          base.heart_rate = phase === 0 ? 80.0 : 140.0;
+          base.heart_rate = phase === 0 ? jitter(80.0, 3.0) : jitter(142.0, 5.0);
         } else if (type === 'bradycardia') {
-          base.heart_rate = phase === 0 ? 70.0 : 40.0;
+          base.heart_rate = phase === 0 ? jitter(70.0, 3.0) : jitter(40.0, 3.0);
         } else if (type === 'fever') {
-          base.body_temperature = phase === 0 ? 36.7 : 39.2;
+          base.body_temperature = phase === 0 ? jitter(36.7, 0.2) : jitter(39.2, 0.3);
         } else if (type === 'heart_attack') {
-          const accel = phase === 0 ? 0.3 : 4.2;
+          const accel = phase === 0 ? jitter(0.3, 0.1) : jitter(4.2, 0.4);
           base.accel_x = accel;
-          base.accel_y = accel;
-          base.accel_z = accel;
+          base.accel_y = jitter(accel, 0.2);
+          base.accel_z = jitter(accel, 0.2);
         } else if (type === 'cardiac_arrest') {
-          base.heart_rate = phase === 0 ? 75.0 : 20.0;
+          base.heart_rate = phase === 0 ? jitter(75.0, 3.0) : jitter(20.0, 2.0);
         }
         return base;
       }
