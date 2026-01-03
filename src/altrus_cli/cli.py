@@ -4,13 +4,16 @@ import argparse
 from pathlib import Path
 
 from altrus_cli.generator import ProjectConfig, create_project
+from altrus_cli.runtime import run_scanner
 
 PREDEFINED_SENSORS = [
     "accelerometer",
     "gyroscope",
+    "heart_rate",
+    "body_temperature",
+    "fall_detection_sensor",
     "ppg",
     "ecg",
-    "temperature",
     "spo2",
     "eda",
     "barometer",
@@ -22,6 +25,13 @@ PREDEFINED_ANOMALIES = [
     "stress_spike",
     "overexertion",
     "sleep_disruption",
+]
+
+PREDEFINED_ACTIVITIES = [
+    "sleep",
+    "rest",
+    "walk",
+    "run",
 ]
 
 ENVIRONMENTS = [
@@ -90,6 +100,31 @@ def _parse_args() -> argparse.Namespace:
         default=str(Path.cwd()),
     )
 
+    run_parser = subparsers.add_parser("run", help="Run the live scanner in a project")
+    run_parser.add_argument(
+        "--protocol",
+        choices=["udp", "tcp"],
+        default="udp",
+        help="Network protocol for incoming sensor data",
+    )
+    run_parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host/IP to bind for incoming sensor data",
+    )
+    run_parser.add_argument(
+        "--port",
+        type=int,
+        default=5055,
+        help="Port to bind for incoming sensor data",
+    )
+    run_parser.add_argument(
+        "--interval",
+        type=float,
+        default=0.5,
+        help="Minimum seconds between terminal updates",
+    )
+
     return parser.parse_args()
 
 
@@ -99,12 +134,14 @@ def _run_init(args: argparse.Namespace) -> None:
 
     sensors = _prompt_multi_select("Select wristband sensors", PREDEFINED_SENSORS)
     anomalies = _prompt_multi_select("Select anomalies to detect", PREDEFINED_ANOMALIES)
+    activities = _prompt_multi_select("Select activities to classify", PREDEFINED_ACTIVITIES)
     environments = _prompt_multi_select("Select target environments", ENVIRONMENTS)
 
     config = ProjectConfig(
         name=name,
         sensors=sensors,
         anomalies=anomalies,
+        activities=activities,
         environments=environments,
     )
 
@@ -116,6 +153,19 @@ def main() -> None:
     args = _parse_args()
     if args.command == "init":
         _run_init(args)
+    if args.command == "run":
+        project_root = Path.cwd()
+        print(
+            "Starting live scanner. "
+            "Send JSON sensor payloads over the selected protocol."
+        )
+        run_scanner(
+            project_root=project_root,
+            protocol=args.protocol,
+            host=args.host,
+            port=args.port,
+            output_interval=args.interval,
+        )
 
 
 if __name__ == "__main__":
