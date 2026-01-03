@@ -57,6 +57,7 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
     data_dir = project_dir / "data"
     env_dir = project_dir / "environments"
     tests_dir = project_dir / "tests"
+    simulations_dir = project_dir / "simulations"
 
     for directory in [
         config_dir,
@@ -67,6 +68,7 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         data_dir,
         env_dir,
         tests_dir,
+        simulations_dir,
     ]:
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -102,6 +104,15 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "Run a short UDP simulation test:\n\n"
         "```bash\n"
         "python -m tests.run_simulation\n"
+        "```\n\n"
+        "## Manual anomaly simulations\n\n"
+        "Run any of these scripts in a separate terminal while `altrus run` is active:\n\n"
+        "```bash\n"
+        "python -m simulations.run_tachycardia\n"
+        "python -m simulations.run_bradycardia\n"
+        "python -m simulations.run_fever\n"
+        "python -m simulations.run_heart_attack\n"
+        "python -m simulations.run_cardiac_arrest\n"
         "```\n\n"
         "## Models\n\n"
         "Default models are stored in `models/activity_model.pkl` and "
@@ -360,6 +371,120 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "\n"
         "if __name__ == \"__main__\":\n"
         "    main()\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "__init__.py").write_text(
+        "\"\"\"Manual anomaly simulation runners.\"\"\"\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "base_simulation.py").write_text(
+        "from __future__ import annotations\n\n"
+        "import json\n"
+        "import socket\n"
+        "import time\n"
+        "from typing import Callable\n\n"
+        "\n"
+        "def run_simulation(payload_fn: Callable[[int], dict], host: str = \"127.0.0.1\", port: int = 5055) -> None:\n"
+        "    \"\"\"Send baseline data for 5s, then anomaly data for 5s.\"\"\"\n"
+        "    start = time.time()\n"
+        "    print(f\"Sending data to {host}:{port} (first 5s normal, next 5s anomaly)...\")\n"
+        "    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:\n"
+        "        while True:\n"
+        "            elapsed = time.time() - start\n"
+        "            phase = 0 if elapsed < 5 else 1\n"
+        "            payload = payload_fn(phase)\n"
+        "            sock.sendto(json.dumps(payload).encode(\"utf-8\"), (host, port))\n"
+        "            time.sleep(0.5)\n"
+        "            if elapsed >= 10:\n"
+        "                break\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "run_tachycardia.py").write_text(
+        "from simulations.base_simulation import run_simulation\n\n"
+        "\n"
+        "def _payload(phase: int) -> dict:\n"
+        "    return {\n"
+        "        \"heart_rate\": 80.0 if phase == 0 else 140.0,\n"
+        "        \"body_temperature\": 36.7,\n"
+        "        \"accel_x\": 0.3,\n"
+        "        \"accel_y\": 0.2,\n"
+        "        \"accel_z\": 0.1,\n"
+        "    }\n\n"
+        "\n"
+        "if __name__ == \"__main__\":\n"
+        "    run_simulation(_payload)\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "run_bradycardia.py").write_text(
+        "from simulations.base_simulation import run_simulation\n\n"
+        "\n"
+        "def _payload(phase: int) -> dict:\n"
+        "    return {\n"
+        "        \"heart_rate\": 70.0 if phase == 0 else 40.0,\n"
+        "        \"body_temperature\": 36.6,\n"
+        "        \"accel_x\": 0.2,\n"
+        "        \"accel_y\": 0.1,\n"
+        "        \"accel_z\": 0.1,\n"
+        "    }\n\n"
+        "\n"
+        "if __name__ == \"__main__\":\n"
+        "    run_simulation(_payload)\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "run_fever.py").write_text(
+        "from simulations.base_simulation import run_simulation\n\n"
+        "\n"
+        "def _payload(phase: int) -> dict:\n"
+        "    return {\n"
+        "        \"heart_rate\": 85.0,\n"
+        "        \"body_temperature\": 36.7 if phase == 0 else 39.2,\n"
+        "        \"accel_x\": 0.25,\n"
+        "        \"accel_y\": 0.2,\n"
+        "        \"accel_z\": 0.15,\n"
+        "    }\n\n"
+        "\n"
+        "if __name__ == \"__main__\":\n"
+        "    run_simulation(_payload)\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "run_heart_attack.py").write_text(
+        "from simulations.base_simulation import run_simulation\n\n"
+        "\n"
+        "def _payload(phase: int) -> dict:\n"
+        "    accel = 0.3 if phase == 0 else 4.2\n"
+        "    return {\n"
+        "        \"heart_rate\": 95.0,\n"
+        "        \"body_temperature\": 37.0,\n"
+        "        \"accel_x\": accel,\n"
+        "        \"accel_y\": accel,\n"
+        "        \"accel_z\": accel,\n"
+        "    }\n\n"
+        "\n"
+        "if __name__ == \"__main__\":\n"
+        "    run_simulation(_payload)\n",
+        encoding="utf-8",
+    )
+
+    (simulations_dir / "run_cardiac_arrest.py").write_text(
+        "from simulations.base_simulation import run_simulation\n\n"
+        "\n"
+        "def _payload(phase: int) -> dict:\n"
+        "    return {\n"
+        "        \"heart_rate\": 75.0 if phase == 0 else 20.0,\n"
+        "        \"body_temperature\": 36.8,\n"
+        "        \"accel_x\": 0.1,\n"
+        "        \"accel_y\": 0.1,\n"
+        "        \"accel_z\": 0.1,\n"
+        "    }\n\n"
+        "\n"
+        "if __name__ == \"__main__\":\n"
+        "    run_simulation(_payload)\n",
         encoding="utf-8",
     )
 
