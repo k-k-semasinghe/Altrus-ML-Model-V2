@@ -34,6 +34,11 @@ PREDEFINED_ACTIVITIES = [
     "run",
 ]
 
+MODEL_CHOICES = [
+    "default",
+    "custom",
+]
+
 ENVIRONMENTS = [
     "raspberry_pi",
     "linux",
@@ -86,6 +91,19 @@ def _prompt_multi_select(title: str, options: list[str]) -> list[str]:
     return selections
 
 
+def _prompt_choice(title: str, options: list[str]) -> str:
+    print(f"\n{title}")
+    for index, option in enumerate(options, start=1):
+        print(f"  {index}. {option}")
+    while True:
+        raw = input("Enter selection number: ").strip()
+        if raw.isdigit():
+            idx = int(raw)
+            if 1 <= idx <= len(options):
+                return options[idx - 1]
+        print("Please enter a valid selection.")
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a wristband sensor fusion project scaffold.",
@@ -136,6 +154,7 @@ def _run_init(args: argparse.Namespace) -> None:
     anomalies = _prompt_multi_select("Select anomalies to detect", PREDEFINED_ANOMALIES)
     activities = _prompt_multi_select("Select activities to classify", PREDEFINED_ACTIVITIES)
     environments = _prompt_multi_select("Select target environments", ENVIRONMENTS)
+    model_choice = _prompt_choice("Select model setup", MODEL_CHOICES)
 
     config = ProjectConfig(
         name=name,
@@ -143,6 +162,7 @@ def _run_init(args: argparse.Namespace) -> None:
         anomalies=anomalies,
         activities=activities,
         environments=environments,
+        model_choice=model_choice,
     )
 
     project_path = create_project(config, output_dir)

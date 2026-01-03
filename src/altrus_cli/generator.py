@@ -12,6 +12,7 @@ class ProjectConfig:
     anomalies: list[str]
     activities: list[str]
     environments: list[str]
+    model_choice: str
 
 
 def _yaml_lines(data: object, indent: int = 0) -> list[str]:
@@ -79,6 +80,7 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
             "anomalies": config.anomalies,
             "activities": config.activities,
             "environments": config.environments,
+            "model": config.model_choice,
         },
     )
 
@@ -103,36 +105,50 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         encoding="utf-8",
     )
 
-    (models_dir / "user_model.py").write_text(
-        "\"\"\"Replace this stub with your trained model.\"\"\"\n\n"
-        "class UserModel:\n"
-        "    \"\"\"Simple threshold-based model for simulated sensor data.\"\"\"\n\n"
-        "    def __init__(self, threshold: float = 2.5) -> None:\n"
-        "        self.threshold = threshold\n\n"
-        "    def predict(self, features: list[float], activities: list[str]) -> dict:\n"
-        "        \"\"\"Return a basic anomaly prediction and activity label.\"\"\"\n"
-        "        if not features:\n"
-        "            return {\"anomaly\": False, \"score\": 0.0, \"activity\": activities[0]}\n"
-        "        max_abs = max(abs(value) for value in features)\n"
-        "        score = min(max_abs / self.threshold, 1.0)\n"
-        "        anomaly = max_abs >= self.threshold\n"
-        "        activity = _classify_activity(max_abs, activities)\n"
-        "        return {\"anomaly\": anomaly, \"score\": round(score, 3), \"activity\": activity}\n\n"
-        "\n"
-        "def _classify_activity(max_abs: float, activities: list[str]) -> str:\n"
-        "    thresholds = [0.4, 1.2, 2.2]\n"
-        "    if max_abs <= thresholds[0]:\n"
-        "        return activities[0] if len(activities) > 0 else \"sleep\"\n"
-        "    if max_abs <= thresholds[1]:\n"
-        "        return activities[1] if len(activities) > 1 else \"rest\"\n"
-        "    if max_abs <= thresholds[2]:\n"
-        "        return activities[2] if len(activities) > 2 else \"walk\"\n"
-        "    return activities[3] if len(activities) > 3 else \"run\"\n\n"
-        "\n"
-        "def load_model() -> UserModel:\n"
-        "    return UserModel()\n",
-        encoding="utf-8",
-    )
+    if config.model_choice == "default":
+        (models_dir / "user_model.py").write_text(
+            "\"\"\"Default model for anomaly detection and activity classification.\"\"\"\n\n"
+            "class UserModel:\n"
+            "    \"\"\"Simple threshold-based model for simulated sensor data.\"\"\"\n\n"
+            "    def __init__(self, threshold: float = 2.5) -> None:\n"
+            "        self.threshold = threshold\n\n"
+            "    def predict(self, features: list[float], activities: list[str]) -> dict:\n"
+            "        \"\"\"Return a basic anomaly prediction and activity label.\"\"\"\n"
+            "        if not features:\n"
+            "            return {\"anomaly\": False, \"score\": 0.0, \"activity\": activities[0]}\n"
+            "        max_abs = max(abs(value) for value in features)\n"
+            "        score = min(max_abs / self.threshold, 1.0)\n"
+            "        anomaly = max_abs >= self.threshold\n"
+            "        activity = _classify_activity(max_abs, activities)\n"
+            "        return {\"anomaly\": anomaly, \"score\": round(score, 3), \"activity\": activity}\n\n"
+            "\n"
+            "def _classify_activity(max_abs: float, activities: list[str]) -> str:\n"
+            "    thresholds = [0.4, 1.2, 2.2]\n"
+            "    if max_abs <= thresholds[0]:\n"
+            "        return activities[0] if len(activities) > 0 else \"sleep\"\n"
+            "    if max_abs <= thresholds[1]:\n"
+            "        return activities[1] if len(activities) > 1 else \"rest\"\n"
+            "    if max_abs <= thresholds[2]:\n"
+            "        return activities[2] if len(activities) > 2 else \"walk\"\n"
+            "    return activities[3] if len(activities) > 3 else \"run\"\n\n"
+            "\n"
+            "def load_model() -> UserModel:\n"
+            "    return UserModel()\n",
+            encoding="utf-8",
+        )
+    else:
+        (models_dir / "user_model.py").write_text(
+            "\"\"\"Custom model stub. Replace with your trained model implementation.\"\"\"\n\n"
+            "class UserModel:\n"
+            "    \"\"\"Implement your own predict method.\"\"\"\n\n"
+            "    def predict(self, features: list[float], activities: list[str]) -> dict:\n"
+            "        \"\"\"Return a dict with anomaly, score, and activity keys.\"\"\"\n"
+            "        raise NotImplementedError(\"Replace with your model logic.\")\n\n"
+            "\n"
+            "def load_model() -> UserModel:\n"
+            "    return UserModel()\n",
+            encoding="utf-8",
+        )
 
     (pipelines_dir / "inference.py").write_text(
         "from __future__ import annotations\n\n"
@@ -216,6 +232,8 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
         "    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:\n"
         "        for _ in range(5):\n"
         "            sample = generate_sample()\n"
+        "            sample[\"heart_rate\"] = round(60 + abs(sample[\"accel_x\"]) * 20, 2)\n"
+        "            sample[\"body_temperature\"] = round(36.5 + abs(sample[\"accel_y\"]) * 0.5, 2)\n"
         "            message = json.dumps(sample).encode(\"utf-8\")\n"
         "            sock.sendto(message, (host, port))\n"
         "            time.sleep(0.5)\n\n"

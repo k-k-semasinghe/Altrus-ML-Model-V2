@@ -21,6 +21,23 @@ def _extract_features(payload: dict) -> list[float]:
     return [value for value in payload.values() if isinstance(value, (int, float))]
 
 
+def _format_payload(payload: dict) -> str:
+    parts = []
+    if "heart_rate" in payload:
+        parts.append(f"hr={payload['heart_rate']}")
+    if "body_temperature" in payload:
+        parts.append(f"temp={payload['body_temperature']}")
+    if all(key in payload for key in ("accel_x", "accel_y", "accel_z")):
+        parts.append(
+            "acc=({:.2f},{:.2f},{:.2f})".format(
+                payload["accel_x"], payload["accel_y"], payload["accel_z"]
+            )
+        )
+    if not parts:
+        parts.append(f"payload={payload}")
+    return " ".join(parts)
+
+
 def _load_config(path: Path) -> RuntimeConfig:
     if not path.exists():
         return RuntimeConfig(activities=DEFAULT_ACTIVITIES)
@@ -94,13 +111,21 @@ def run_scanner(
         now = time.time()
         if now - last_output >= output_interval:
             status = "ANOMALY" if prediction["anomaly"] else "normal"
+            summary = _format_payload(payload)
             print(
-                f"payload={payload} -> {status} "
+                f"{summary} -> {status} "
                 f"activity={prediction['activity']} (score={prediction['score']})"
             )
             last_output = now
 
-    if protocol == "udp":
-        _run_with_udp(host, port, handle_payload)
-    else:
-        _run_with_tcp(host, port, handle_payload)
+    print(
+        f"Listening for {protocol.upper()} sensor data on {host}:{port}. "
+        "Press Ctrl+C to stop."
+    )
+    try:
+        if protocol == "udp":
+            _run_with_udp(host, port, handle_payload)
+        else:
+            _run_with_tcp(host, port, handle_payload)
+    except KeyboardInterrupt:
+        print("\nScanner stopped.")
