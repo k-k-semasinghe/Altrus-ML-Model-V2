@@ -223,22 +223,46 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
     else:
         (models_dir / "activity_model.py").write_text(
             "\"\"\"Custom activity model stub.\"\"\"\n\n"
+            "import pickle\n"
+            "from pathlib import Path\n\n"
+            "\n"
             "class ActivityModel:\n"
+            "    def __init__(self, thresholds: list[float]) -> None:\n"
+            "        self.thresholds = thresholds\n\n"
             "    def predict(self, accel_magnitude: float, activities: list[str]) -> str:\n"
-            "        raise NotImplementedError(\"Replace with your activity model logic.\")\n\n"
+            "        if accel_magnitude <= self.thresholds[0]:\n"
+            "            return activities[0] if len(activities) > 0 else \"sleep\"\n"
+            "        if accel_magnitude <= self.thresholds[1]:\n"
+            "            return activities[1] if len(activities) > 1 else \"rest\"\n"
+            "        if accel_magnitude <= self.thresholds[2]:\n"
+            "            return activities[2] if len(activities) > 2 else \"walk\"\n"
+            "        return activities[3] if len(activities) > 3 else \"run\"\n\n"
             "\n"
             "def load_activity_model() -> ActivityModel:\n"
-            "    return ActivityModel()\n",
+            "    path = Path(__file__).with_name(\"activity_model.pkl\")\n"
+            "    if path.exists():\n"
+            "        data = pickle.loads(path.read_bytes())\n"
+            "        return ActivityModel(data[\"thresholds\"])\n"
+            "    raise NotImplementedError(\"Provide activity_model.pkl or custom logic.\")\n",
             encoding="utf-8",
         )
         (models_dir / "anomaly_model.py").write_text(
             "\"\"\"Custom anomaly model stub.\"\"\"\n\n"
+            "import pickle\n"
+            "from pathlib import Path\n\n"
+            "\n"
             "class AnomalyModel:\n"
             "    def predict(self, payload: dict, anomalies: list[str]) -> dict:\n"
-            "        raise NotImplementedError(\"Replace with your anomaly model logic.\")\n\n"
+            "        return {\"anomaly\": False, \"score\": 0.0, \"anomaly_type\": \"normal\"}\n\n"
             "\n"
             "def load_anomaly_model() -> AnomalyModel:\n"
-            "    return AnomalyModel()\n",
+            "    path = Path(__file__).with_name(\"anomaly_model.pkl\")\n"
+            "    if path.exists():\n"
+            "        data = pickle.loads(path.read_bytes())\n"
+            "        model = AnomalyModel()\n"
+            "        model.thresholds = data[\"thresholds\"]\n"
+            "        return model\n"
+            "    raise NotImplementedError(\"Provide anomaly_model.pkl or custom logic.\")\n",
             encoding="utf-8",
         )
 
