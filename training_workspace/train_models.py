@@ -37,6 +37,8 @@ WISDM_ACTIVITY_MAP = {
     "LyingDown": "sleep",
 }
 
+ACTIVITY_ORDER = ["sleep", "rest", "walk", "run"]
+
 
 def _percentile(values: list[float], ratio: float) -> float:
     if not values:
@@ -63,8 +65,8 @@ def _accel_magnitude(x: float | None, y: float | None, z: float | None) -> float
     return max(abs(x), abs(y), abs(z))
 
 
-def _load_pamap2(protocol_dir: Path) -> tuple[list[float], list[float], list[float]]:
-    magnitudes: list[float] = []
+def _load_pamap2(protocol_dir: Path) -> tuple[list[tuple[float, str]], list[float], list[float]]:
+    labeled_magnitudes: list[tuple[float, str]] = []
     heart_rates: list[float] = []
     temperatures: list[float] = []
 
@@ -74,8 +76,7 @@ def _load_pamap2(protocol_dir: Path) -> tuple[list[float], list[float], list[flo
                 parts = line.strip().split()
                 if len(parts) < 7:
                     continue
-                activity = parts[1]
-                activity_id = int(float(activity)) if activity else -1
+                activity_id = int(float(parts[1]))
                 mapped = PAMAP2_ACTIVITY_MAP.get(activity_id)
                 if not mapped:
                     continue
@@ -87,16 +88,16 @@ def _load_pamap2(protocol_dir: Path) -> tuple[list[float], list[float], list[flo
                     _safe_float(parts[6]),
                 )
                 if accel is not None:
-                    magnitudes.append(accel)
+                    labeled_magnitudes.append((accel, mapped))
                 if heart_rate is not None:
                     heart_rates.append(heart_rate)
                 if temp is not None:
                     temperatures.append(temp)
-    return magnitudes, heart_rates, temperatures
+    return labeled_magnitudes, heart_rates, temperatures
 
 
-def _load_wisdm(raw_path: Path) -> list[float]:
-    magnitudes: list[float] = []
+def _load_wisdm(raw_path: Path) -> list[tuple[float, str]]:
+    labeled_magnitudes: list[tuple[float, str]] = []
     with raw_path.open("r", encoding="utf-8") as handle:
         reader = csv.reader(handle)
         for row in reader:
@@ -111,8 +112,8 @@ def _load_wisdm(raw_path: Path) -> list[float]:
             z = _safe_float(row[5].rstrip(";"))
             accel = _accel_magnitude(x, y, z)
             if accel is not None:
-                magnitudes.append(accel)
-    return magnitudes
+                labeled_magnitudes.append((accel, mapped))
+    return labeled_magnitudes
 
 
 def _train_activity_thresholds(magnitudes: list[float]) -> list[float]:
@@ -123,6 +124,37 @@ def _train_activity_thresholds(magnitudes: list[float]) -> list[float]:
         round(_percentile(magnitudes, 0.5), 2),
         round(_percentile(magnitudes, 0.75), 2),
     ]
+
+
+def _predict_activity(magnitude: float, thresholds: list[float]) -> str:
+    if magnitude <= thresholds[0]:
+        return "sleep"
+    if magnitude <= thresholds[1]:
+        return "rest"
+    if magnitude <= thresholds[2]:
+        return "walk"
+    return "run"
+
+
+def _evaluate_activity(labeled: list[tuple[float, str]], thresholds: list[float]) -> dict:
+    if not labeled:
+        return {"accuracy": 0.0, "total": 0, "correct": 0}
+    correct = 0
+    total = 0
+    per_class = {label: {"correct": 0, "total": 0} for label in ACTIVITY_ORDER}
+    for magnitude, label in labeled:
+        prediction = _predict_activity(magnitude, thresholds)
+        total += 1
+        per_class[label]["total"] += 1
+        if prediction == label:
+            correct += 1
+            per_class[label]["correct"] += 1
+    return {
+        "accuracy": correct / total if total else 0.0,
+        "total": total,
+        "correct": correct,
+        "per_class": per_class,
+    }
 
 
 def _train_anomaly_thresholds(
@@ -154,6 +186,11 @@ def _parse_args() -> argparse.Namespace:
         required=True,
         help="Path to the dataset root containing PAMAP2/WISDM folders.",
     )
+    parser.add_argument(
+        "--evaluate",
+        action="store_true",
+        help="Print activity classification accuracy from the training data.",
+    )
     return parser.parse_args()
 
 
@@ -164,18 +201,20 @@ def main() -> None:
     pamap2_dir = dataset_root / "PAMAP2_Dataset" / "Protocol"
     wisdm_path = dataset_root / "WISDM_ar_v1.1" / "WISDM_ar_v1.1_raw.txt"
 
-    magnitudes: list[float] = []
+    labeled_magnitudes: list[tuple[float, str]] = []
     heart_rates: list[float] = []
     temperatures: list[float] = []
 
     if pamap2_dir.exists():
-        pamap2_magnitudes, pamap2_hr, pamap2_temp = _load_pamap2(pamap2_dir)
-        magnitudes.extend(pamap2_magnitudes)
+        pamap2_labeled, pamap2_hr, pamap2_temp = _load_pamap2(pamap2_dir)
+        labeled_magnitudes.extend(pamap2_labeled)
         heart_rates.extend(pamap2_hr)
         temperatures.extend(pamap2_temp)
 
     if wisdm_path.exists():
-        magnitudes.extend(_load_wisdm(wisdm_path))
+        labeled_magnitudes.extend(_load_wisdm(wisdm_path))
+
+    magnitudes = [value for value, _ in labeled_magnitudes]
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -192,6 +231,15 @@ def main() -> None:
     print(f"Activity thresholds: {activity_thresholds}")
     print(f"Anomaly thresholds: {anomaly_thresholds}")
     print(f"Models saved to: {OUTPUT_DIR}")
+
+    if args.evaluate:
+        results = _evaluate_activity(labeled_magnitudes, activity_thresholds)
+        print(f"Activity accuracy: {results['accuracy']:.3f} ({results['correct']}/{results['total']})")
+        for label in ACTIVITY_ORDER:
+            stats = results["per_class"][label]
+            if stats["total"]:
+                rate = stats["correct"] / stats["total"]
+                print(f"  {label}: {rate:.3f} ({stats['correct']}/{stats['total']})")
 
 
 if __name__ == "__main__":

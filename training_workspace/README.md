@@ -9,6 +9,12 @@ safely delete it after you generate the `.pkl` files you need.
 python training_workspace/train_models.py --dataset-root "D:/path/to/dataset"
 ```
 
+To include basic activity accuracy metrics:
+
+```bash
+python training_workspace/train_models.py --dataset-root "D:/path/to/dataset" --evaluate
+```
+
 The script writes the models to:
 
 ```
