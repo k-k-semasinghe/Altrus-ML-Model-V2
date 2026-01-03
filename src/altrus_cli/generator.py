@@ -197,14 +197,14 @@ def create_project(config: ProjectConfig, output_dir: Path) -> Path:
             encoding="utf-8",
         )
 
-        activity_params = {\"thresholds\": [0.4, 1.2, 2.2]}
+        activity_params = {"thresholds": [0.4, 1.2, 2.2]}
         anomaly_params = {
-            \"thresholds\": {
-                \"tachycardia\": 120.0,
-                \"bradycardia\": 50.0,
-                \"fever\": 38.0,
-                \"heart_attack\": 3.5,
-                \"cardiac_arrest\": 30.0,
+            "thresholds": {
+                "tachycardia": 120.0,
+                "bradycardia": 50.0,
+                "fever": 38.0,
+                "heart_attack": 3.5,
+                "cardiac_arrest": 30.0,
             }
         }
         (models_dir / "activity_model.pkl").write_bytes(pickle.dumps(activity_params))
