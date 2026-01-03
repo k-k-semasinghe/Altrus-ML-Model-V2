@@ -10,10 +10,10 @@ to a tiny relay server, and the relay forwards them to UDP.
 python mobile_web/relay_server.py
 ```
 
-This listens on:
+This serves the web UI and the relay endpoint at:
 
 ```
-http://<PC-IP>:8080/send
+http://<PC-IP>:8080/
 ```
 
 ## 2) Start the Altrus scanner
@@ -24,9 +24,9 @@ altrus run --host 0.0.0.0 --port 5055
 
 ## 3) Open the mobile web UI
 
-- Copy `mobile_web/index.html` to your phone or open it with any local file viewer.
-- Update the **Relay URL** to match your PC IP, e.g.:
-  `http://192.168.1.45:8080/send`
+- On your phone, open:
+  `http://<PC-IP>:8080/`
+- The Relay URL field will auto-fill to `http://<PC-IP>:8080/send`.
 - Update the **UDP Host** to your PC IP and port (default 5055).
 - Tap any simulation button to start sending data every 0.5s.
 - Tap **Stop** to stop the loop.

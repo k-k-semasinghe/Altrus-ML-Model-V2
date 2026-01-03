@@ -59,7 +59,7 @@
 
     <div class="card">
       <label for="relay">Relay URL (HTTP)</label>
-      <input id="relay" value="http://192.168.1.45:8080/send" />
+      <input id="relay" value="" />
       <label for="host">UDP Host</label>
       <input id="host" value="192.168.1.45" />
       <label for="port">UDP Port</label>
@@ -83,6 +83,10 @@
     <script>
       let intervalId = null;
       let startTime = null;
+
+      function defaultRelayUrl() {
+        return `${window.location.protocol}//${window.location.host}/send`;
+      }
 
       function buildPayload(type, phase) {
         const base = {
@@ -110,7 +114,8 @@
       }
 
       async function sendPayload(payload) {
-        const relayUrl = document.getElementById('relay').value.trim();
+        const relayInput = document.getElementById('relay');
+        const relayUrl = relayInput.value.trim() || defaultRelayUrl();
         const host = document.getElementById('host').value.trim();
         const port = parseInt(document.getElementById('port').value.trim(), 10);
         const body = JSON.stringify({ target_host: host, target_port: port, payload });
@@ -124,6 +129,10 @@
       function startSimulation(type) {
         stopSimulation();
         startTime = Date.now();
+        const relayInput = document.getElementById('relay');
+        if (!relayInput.value.trim()) {
+          relayInput.value = defaultRelayUrl();
+        }
         intervalId = setInterval(async () => {
           const elapsed = (Date.now() - startTime) / 1000;
           const phase = elapsed < 5 ? 0 : 1;
